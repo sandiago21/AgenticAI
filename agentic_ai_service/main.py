@@ -1,33 +1,22 @@
 from fastapi import FastAPI
 from typing import List, Optional
-from enum import IntEnum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-import os
-import time
 import requests
-import inspect
-import pandas as pd
 import re
 import warnings
+
 warnings.filterwarnings("ignore")
 import json
 import logging
-from typing import TypedDict, Annotated, Dict, Any
+from typing import TypedDict, Annotated, Dict
 from json_repair import repair_json
-import requests
 from bs4 import BeautifulSoup
-from pydantic import BaseModel, Field
-from typing import Dict
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START
 from langgraph.graph.message import add_messages
-from langchain_core.messages import AnyMessage, HumanMessage, AIMessage
-from langchain_community.retrievers import BM25Retriever
-from langchain_core.tools import Tool
-from langchain_core.documents import Document
-from langgraph.prebuilt import ToolNode, tools_condition
+from langchain_core.messages import AnyMessage
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -45,6 +34,7 @@ sentence_transformer_model = SentenceTransformer("all-mpnet-base-v2")
 
 logger = logging.getLogger("agent")
 logging.basicConfig(level=logging.INFO)
+
 
 class Config(object):
     def __init__(self):
@@ -65,9 +55,7 @@ config = Config()
 
 tokenizer = AutoTokenizer.from_pretrained(config.model_name)
 model = AutoModelForCausalLM.from_pretrained(
-    config.model_name,
-    torch_dtype=torch.float16,
-    device_map=config.DEVICE
+    config.model_name, torch_dtype=torch.float16, device_map=config.DEVICE
 )
 
 # reasoning_tokenizer = AutoTokenizer.from_pretrained(config.reasoning_model_name)
@@ -98,10 +86,10 @@ def generate(prompt):
             **inputs,
             max_new_tokens=config.max_len,
             temperature=config.temperature,
-            repetition_penalty = config.repetition_penalty,
+            repetition_penalty=config.repetition_penalty,
         )
 
-    generated = outputs[0][inputs["input_ids"].shape[-1]:]
+    generated = outputs[0][inputs["input_ids"].shape[-1] :]
 
     return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
@@ -126,17 +114,18 @@ def reasoning_generate(prompt):
             **inputs,
             max_new_tokens=config.reasoning_max_len,
             temperature=config.temperature,
-            repetition_penalty = config.repetition_penalty,
+            repetition_penalty=config.repetition_penalty,
         )
 
-    generated = outputs[0][inputs["input_ids"].shape[-1]:]
+    generated = outputs[0][inputs["input_ids"].shape[-1] :]
 
     return tokenizer.decode(generated, skip_special_tokens=True).strip()
-    
+
 
 class Action(BaseModel):
     tool: str = Field(...)
     args: Dict
+
 
 # Generate the AgentState and Agent graph
 class AgentState(TypedDict):
@@ -185,9 +174,7 @@ def visit_webpage(url: str) -> str:
 
 
 def visit_webpage(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
@@ -203,13 +190,11 @@ def visit_webpage(url: str) -> str:
 
     text = " \n ".join(el.get_text(strip=False) for el in elements)
 
-    return (text[:1000], )
+    return (text[:1000],)
 
 
 def visit_webpage(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
@@ -239,13 +224,11 @@ def visit_webpage(url: str) -> str:
             if cols:
                 texts.append(" | ".join(cols))
 
-    return (" \n ".join(texts)[:1000], )
+    return (" \n ".join(texts)[:1000],)
 
 
 def visit_webpage(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
@@ -272,15 +255,18 @@ def visit_webpage(url: str) -> str:
                 table_texts.append(" | ".join(cols))
 
     if len(table_texts) > 0:
-        return [main_text[:1000], " \n ".join(table_texts),]
+        return [
+            main_text[:1000],
+            " \n ".join(table_texts),
+        ]
     else:
-        return [main_text[:1000],]
+        return [
+            main_text[:1000],
+        ]
 
 
 def visit_webpage(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
@@ -308,15 +294,18 @@ def visit_webpage(url: str) -> str:
                     table_texts.append(" | ".join(cols))
 
     if len(table_texts) > 0:
-        return [main_text[:1000], " \n ".join(table_texts),]
+        return [
+            main_text[:1000],
+            " \n ".join(table_texts),
+        ]
     else:
-        return [main_text[:1000],]
+        return [
+            main_text[:1000],
+        ]
 
 
 def visit_webpage_wiki(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
@@ -344,9 +333,14 @@ def visit_webpage_wiki(url: str) -> str:
                     table_texts.append(" | ".join(cols))
 
     if len(table_texts) > 0:
-        return [main_text[:1000], " \n ".join(table_texts)[:5000],]
+        return [
+            main_text[:1000],
+            " \n ".join(table_texts)[:5000],
+        ]
     else:
-        return [main_text[:1000],]
+        return [
+            main_text[:1000],
+        ]
 
 
 def visit_webpage_main(url: str):
@@ -399,12 +393,10 @@ def web_search(query: str, num_results: int = 10):
     """
 
     url = "https://html.duckduckgo.com/html/"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     response = requests.post(url, data={"q": query}, headers=headers)
-    
+
     soup = BeautifulSoup(response.text, "html.parser")
     return [a.get("href") for a in soup.select(".result__a")[:num_results]]
 
@@ -495,7 +487,7 @@ User request:
     state["proposed_action"] = data
 
     return state
-    
+
 
 def safety_node(state: AgentState):
     """
@@ -531,61 +523,59 @@ Information:
     raw = raw_output.strip()
 
     matches = re.findall(r"Response:\s*([^\n]+)", raw)
-    
+
     if matches:
         output = matches[-1].strip()  # ✅ take LAST occurrence
     else:
         # Find the first valid "Response: ..." occurrence
         match = re.search(r"Response:\s*([^\n\.]+)", raw)
-        
+
         if match:
             output = match.group(1).strip()
         else:
             # fallback: take first line
             output = raw.split("\n")[0].strip()
-    
+
         if "Response:" in output:
             output = output.split("Response:")[-1]
         elif "Response" in output:
             output = output.split("Response")[-1]
-        
+
         # Clean quotes / trailing punctuation
         output = output.strip('"').strip()
         if output.endswith("."):
             output = output[:-1]
-    
+
     # Clean
     if "Response:" in output:
         output = output.split("Response:")[-1]
     elif "Response" in output:
         output = output.split("Response")[-1]
-    
+
     # Clean quotes / trailing punctuation
     output = output.strip('"').strip()
     if output.endswith("."):
         output = output[:-1]
 
-
     if output == "":
         # Find the first valid "Response: ..." occurrence
         match = re.search(r"Response:\s*([^\n\.]+)", raw)
-        
+
         if match:
             output = match.group(1).strip()
         else:
             # fallback: take first line
             output = raw.split("\n")[0].strip()
-    
+
         if "Response:" in output:
             output = output.split("Response:")[-1]
         elif "Response" in output:
             output = output.split("Response")[-1]
-        
+
         # Clean quotes / trailing punctuation
         output = output.strip('"').strip()
         if output.endswith("."):
             output = output[:-1]
-
 
     output = output.split(".")[0]
 
@@ -728,70 +718,105 @@ def tool_executor(state: AgentState):
     try:
         webpage_result = ""
         action = Action.model_validate(state["proposed_action"])
-    
+
         best_query_webpage_information_similarity_score = -1.0
         best_webpage_information = ""
-    
+
         webpage_information_complete = ""
-    
+
         if action.tool == "web_search":
             logger.info(f"action.tool: {action.tool}")
-            
-            query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-            query_arg_embeddings = sentence_transformer_model.encode_query(state["proposed_action"]["args"]["query"]).reshape(1, -1)
-            score = float(cosine_similarity(query_embeddings, query_arg_embeddings)[0][0])
-    
+
+            query_embeddings = sentence_transformer_model.encode_query(
+                state["messages"][-1].content
+            ).reshape(1, -1)
+            query_arg_embeddings = sentence_transformer_model.encode_query(
+                state["proposed_action"]["args"]["query"]
+            ).reshape(1, -1)
+            score = float(
+                cosine_similarity(query_embeddings, query_arg_embeddings)[0][0]
+            )
+
             if score > 0.80:
                 results = web_search(**action.args)
             else:
-                logger.info(f"Overwriting user query because the Agent suggested query had score: {state["proposed_action"]["args"]["query"]} - {score}")
+                logger.info(
+                    f"Overwriting user query because the Agent suggested query had score: {state['proposed_action']['args']['query']} - {score}"
+                )
                 results = web_search(**{"query": state["messages"][-1].content})
-    
+
             logger.info(f"Webpages - Results: {results}")
-    
+
             for result in results:
                 try:
                     webpage_results = visit_webpage_wiki(result)
                     webpage_result = " \n ".join(webpage_results)
-    
+
                     # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-                    webpage_information_embeddings = sentence_transformer_model.encode_query(webpage_result).reshape(1, -1)
-                    query_webpage_information_similarity_score = float(cosine_similarity(query_embeddings, webpage_information_embeddings)[0][0])
-        
+                    query_embeddings = sentence_transformer_model.encode_query(
+                        state["messages"][-1].content
+                    ).reshape(1, -1)
+                    webpage_information_embeddings = (
+                        sentence_transformer_model.encode_query(webpage_result).reshape(
+                            1, -1
+                        )
+                    )
+                    query_webpage_information_similarity_score = float(
+                        cosine_similarity(
+                            query_embeddings, webpage_information_embeddings
+                        )[0][0]
+                    )
+
                     # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-        
+
                     if query_webpage_information_similarity_score > 0.65:
                         webpage_information_complete += webpage_result
                         webpage_information_complete += " \n "
                         webpage_information_complete += " \n "
-        
-                    if query_webpage_information_similarity_score > best_query_webpage_information_similarity_score:
-                        best_query_webpage_information_similarity_score = query_webpage_information_similarity_score
+
+                    if (
+                        query_webpage_information_similarity_score
+                        > best_query_webpage_information_similarity_score
+                    ):
+                        best_query_webpage_information_similarity_score = (
+                            query_webpage_information_similarity_score
+                        )
                         best_webpage_information = webpage_result
-
-
 
                     webpage_results = visit_webpage_main(result)
                     webpage_result = " \n ".join(webpage_results)
-    
+
                     # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-                    webpage_information_embeddings = sentence_transformer_model.encode_query(webpage_result).reshape(1, -1)
-                    query_webpage_information_similarity_score = float(cosine_similarity(query_embeddings, webpage_information_embeddings)[0][0])
-        
+                    query_embeddings = sentence_transformer_model.encode_query(
+                        state["messages"][-1].content
+                    ).reshape(1, -1)
+                    webpage_information_embeddings = (
+                        sentence_transformer_model.encode_query(webpage_result).reshape(
+                            1, -1
+                        )
+                    )
+                    query_webpage_information_similarity_score = float(
+                        cosine_similarity(
+                            query_embeddings, webpage_information_embeddings
+                        )[0][0]
+                    )
+
                     # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-        
+
                     if query_webpage_information_similarity_score > 0.65:
                         webpage_information_complete += webpage_result
                         webpage_information_complete += " \n "
                         webpage_information_complete += " \n "
-        
-                    if query_webpage_information_similarity_score > best_query_webpage_information_similarity_score:
-                        best_query_webpage_information_similarity_score = query_webpage_information_similarity_score
+
+                    if (
+                        query_webpage_information_similarity_score
+                        > best_query_webpage_information_similarity_score
+                    ):
+                        best_query_webpage_information_similarity_score = (
+                            query_webpage_information_similarity_score
+                        )
                         best_webpage_information = webpage_result
-                
-    
+
                 except Exception as e:
                     logger.info(f"Tool Executor - Exception: {e}")
 
@@ -808,16 +833,29 @@ def tool_executor(state: AgentState):
                     counter = 0
                     best_query_webpage_information_similarity_score = 0.0
                     for text in texts:
-                        query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-                        webpage_information_embeddings = sentence_transformer_model.encode_query(text).reshape(1, -1)
-                        query_webpage_information_similarity_score = float(cosine_similarity(query_embeddings, webpage_information_embeddings)[0][0])
-        
-                        if query_webpage_information_similarity_score > best_query_webpage_information_similarity_score:
-                            best_query_webpage_information_similarity_score = query_webpage_information_similarity_score
+                        query_embeddings = sentence_transformer_model.encode_query(
+                            state["messages"][-1].content
+                        ).reshape(1, -1)
+                        webpage_information_embeddings = (
+                            sentence_transformer_model.encode_query(text).reshape(1, -1)
+                        )
+                        query_webpage_information_similarity_score = float(
+                            cosine_similarity(
+                                query_embeddings, webpage_information_embeddings
+                            )[0][0]
+                        )
+
+                        if (
+                            query_webpage_information_similarity_score
+                            > best_query_webpage_information_similarity_score
+                        ):
+                            best_query_webpage_information_similarity_score = (
+                                query_webpage_information_similarity_score
+                            )
                             index = counter
-    
+
                         counter += 1
-    
+
                     webpage_information_complete = f"""answer: {texts[index + 1]}"""
                     state["best_query_webpage_information_similarity_score"] = 1.0
 
@@ -826,63 +864,101 @@ def tool_executor(state: AgentState):
                     webpage_result = " \n ".join(webpage_results)
 
                     # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-                    webpage_information_embeddings = sentence_transformer_model.encode_query(webpage_result).reshape(1, -1)
-                    query_webpage_information_similarity_score = float(cosine_similarity(query_embeddings, webpage_information_embeddings)[0][0])
-        
+                    query_embeddings = sentence_transformer_model.encode_query(
+                        state["messages"][-1].content
+                    ).reshape(1, -1)
+                    webpage_information_embeddings = (
+                        sentence_transformer_model.encode_query(webpage_result).reshape(
+                            1, -1
+                        )
+                    )
+                    query_webpage_information_similarity_score = float(
+                        cosine_similarity(
+                            query_embeddings, webpage_information_embeddings
+                        )[0][0]
+                    )
+
                     # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
 
                     if query_webpage_information_similarity_score > 0.65:
                         webpage_information_complete += webpage_result
                         webpage_information_complete += " \n "
                         webpage_information_complete += " \n "
-        
-                    if query_webpage_information_similarity_score > best_query_webpage_information_similarity_score:
-                        best_query_webpage_information_similarity_score = query_webpage_information_similarity_score
-                        best_webpage_information = webpage_result
 
+                    if (
+                        query_webpage_information_similarity_score
+                        > best_query_webpage_information_similarity_score
+                    ):
+                        best_query_webpage_information_similarity_score = (
+                            query_webpage_information_similarity_score
+                        )
+                        best_webpage_information = webpage_result
 
                     webpage_results = visit_webpage_main(action.args["url"])
                     webpage_result = " \n ".join(webpage_results)
-    
+
                     # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(state["messages"][-1].content).reshape(1, -1)
-                    webpage_information_embeddings = sentence_transformer_model.encode_query(webpage_result).reshape(1, -1)
-                    query_webpage_information_similarity_score = float(cosine_similarity(query_embeddings, webpage_information_embeddings)[0][0])
-        
+                    query_embeddings = sentence_transformer_model.encode_query(
+                        state["messages"][-1].content
+                    ).reshape(1, -1)
+                    webpage_information_embeddings = (
+                        sentence_transformer_model.encode_query(webpage_result).reshape(
+                            1, -1
+                        )
+                    )
+                    query_webpage_information_similarity_score = float(
+                        cosine_similarity(
+                            query_embeddings, webpage_information_embeddings
+                        )[0][0]
+                    )
+
                     # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-        
+
                     if query_webpage_information_similarity_score > 0.65:
                         webpage_information_complete += webpage_result
                         webpage_information_complete += " \n "
                         webpage_information_complete += " \n "
-        
-                    if query_webpage_information_similarity_score > best_query_webpage_information_similarity_score:
-                        best_query_webpage_information_similarity_score = query_webpage_information_similarity_score
+
+                    if (
+                        query_webpage_information_similarity_score
+                        > best_query_webpage_information_similarity_score
+                    ):
+                        best_query_webpage_information_similarity_score = (
+                            query_webpage_information_similarity_score
+                        )
                         best_webpage_information = webpage_result
             except Exception as e:
                 webpage_information_complete = str(e)
                 pass
         elif "answer" in state["proposed_action"]:
-            webpage_information_complete = f"""answer: {state["proposed_action"]["answer"]}"""
+            webpage_information_complete = (
+                f"""answer: {state["proposed_action"]["answer"]}"""
+            )
             state["best_query_webpage_information_similarity_score"] = 1.0
         else:
             webpage_information_complete = ""
-    
-        if webpage_information_complete == "" and best_query_webpage_information_similarity_score > 0.30:
+
+        if (
+            webpage_information_complete == ""
+            and best_query_webpage_information_similarity_score > 0.30
+        ):
             webpage_information_complete = best_webpage_information
-        
+
         state["information"] = webpage_information_complete[:3000]
-        state["best_query_webpage_information_similarity_score"] = best_query_webpage_information_similarity_score
+        state["best_query_webpage_information_similarity_score"] = (
+            best_query_webpage_information_similarity_score
+        )
     except:
         if "answer" in state["proposed_action"]:
-            webpage_information_complete = f"""answer: {state["proposed_action"]["answer"]}"""
+            webpage_information_complete = (
+                f"""answer: {state["proposed_action"]["answer"]}"""
+            )
             state["information"] = webpage_information_complete
             state["best_query_webpage_information_similarity_score"] = 1.0
         else:
             state["information"] = ""
             state["best_query_webpage_information_similarity_score"] = -1.0
-    
+
     # logger.info(f"Information: {state['information']}")
     # logger.info(f"Information: {state['best_query_webpage_information_similarity_score']}")
 
@@ -921,19 +997,24 @@ class Agent:
     def __init__(self):
         self.safe_app = safe_workflow.compile()
         print("Agent initialized.")
+
     def __call__(self, question: str, filename: str) -> str:
         state = {
             "messages": question,
         }
 
-        if len(tokenizer.encode(state["messages"][::-1])) < len(tokenizer.encode(state["messages"])):
+        if len(tokenizer.encode(state["messages"][::-1])) < len(
+            tokenizer.encode(state["messages"])
+        ):
             state["messages"] = state["messages"][::-1]
 
         try:
             response = self.safe_app.invoke(state)
 
             if "answer: " in response["information"]:
-                response["output"] = response["information"].split("answer: ")[-1].strip()
+                response["output"] = (
+                    response["information"].split("answer: ")[-1].strip()
+                )
 
             agent_answer = response["output"]
 
@@ -943,22 +1024,36 @@ class Agent:
         return agent_answer
 
 
-
 all_questions_and_answers = []
 agent = Agent()
 
 
 class Query(BaseModel):
-    question: str = Field(..., min_length=3, max_length=512, description="User's question to be answered by the agent")
-    filename: Optional[str] = Field(None, min_length=3, max_length=512, description="Name of file containing useful information to be used by the agent")
-    answer: Optional[str] = Field(None, min_length=3, max_length=512, description="Answer provided by the agent to the user's question")
+    question: str = Field(
+        ...,
+        min_length=3,
+        max_length=512,
+        description="User's question to be answered by the agent",
+    )
+    filename: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=512,
+        description="Name of file containing useful information to be used by the agent",
+    )
+    answer: Optional[str] = Field(
+        None,
+        min_length=3,
+        max_length=512,
+        description="Answer provided by the agent to the user's question",
+    )
 
 
 @api.get("/queries", response_model=List[Query])
 def get_queries(first_n: int = None):
     if first_n:
         return all_questions_and_answers[:first_n]
-    
+
     return all_questions_and_answers
 
 
