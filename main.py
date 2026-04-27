@@ -133,6 +133,7 @@ class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     proposed_action: str
     information: str
+    webpage_results: List[str]
     raw_output: str
     output: str
     confidence: float
@@ -716,12 +717,10 @@ def tool_executor(state: AgentState):
     responsible for translating structured LLM intent into real system actions.
     """
 
-    try:
-        webpage_result = ""
-        action = Action.model_validate(state["proposed_action"])
+    final_webpage_results = []
 
-        best_query_webpage_information_similarity_score = -1.0
-        best_webpage_information = ""
+    try:
+        action = Action.model_validate(state["proposed_action"])
 
         webpage_information_complete = ""
 
@@ -753,181 +752,29 @@ def tool_executor(state: AgentState):
                     webpage_results = visit_webpage_wiki(result)
                     webpage_result = " \n ".join(webpage_results)
 
-                    # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(
-                        state["messages"][-1].content
-                    ).reshape(1, -1)
-                    webpage_information_embeddings = (
-                        sentence_transformer_model.encode_query(webpage_result).reshape(
-                            1, -1
-                        )
-                    )
-                    query_webpage_information_similarity_score = float(
-                        cosine_similarity(
-                            query_embeddings, webpage_information_embeddings
-                        )[0][0]
-                    )
-
-                    # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-
-                    if query_webpage_information_similarity_score > 0.65:
-                        webpage_information_complete += webpage_result
-                        webpage_information_complete += " \n "
-                        webpage_information_complete += " \n "
-
-                    if (
-                        query_webpage_information_similarity_score
-                        > best_query_webpage_information_similarity_score
-                    ):
-                        best_query_webpage_information_similarity_score = (
-                            query_webpage_information_similarity_score
-                        )
-                        best_webpage_information = webpage_result
+                    final_webpage_results.append(webpage_result)
 
                     webpage_results = visit_webpage_main(result)
                     webpage_result = " \n ".join(webpage_results)
 
-                    # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(
-                        state["messages"][-1].content
-                    ).reshape(1, -1)
-                    webpage_information_embeddings = (
-                        sentence_transformer_model.encode_query(webpage_result).reshape(
-                            1, -1
-                        )
-                    )
-                    query_webpage_information_similarity_score = float(
-                        cosine_similarity(
-                            query_embeddings, webpage_information_embeddings
-                        )[0][0]
-                    )
-
-                    # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-
-                    if query_webpage_information_similarity_score > 0.65:
-                        webpage_information_complete += webpage_result
-                        webpage_information_complete += " \n "
-                        webpage_information_complete += " \n "
-
-                    if (
-                        query_webpage_information_similarity_score
-                        > best_query_webpage_information_similarity_score
-                    ):
-                        best_query_webpage_information_similarity_score = (
-                            query_webpage_information_similarity_score
-                        )
-                        best_webpage_information = webpage_result
+                    final_webpage_results.append(webpage_result)
 
                 except Exception as e:
+                    webpage_information_complete = str(e)
                     logger.info(f"Tool Executor - Exception: {e}")
 
         elif action.tool == "visit_webpage":
             try:
-                if "www.youtube.com" in str(action.args["url"]):
-                    video_id = action.args["url"].split("www.youtube.com/watch?v=")[-1]
-                    api = YouTubeTranscriptApi()
-                    transcript = api.fetch(video_id)
-                    texts = [x.text for x in transcript]
-                    webpage_information_complete = " \n ".join(texts)
+                webpage_results = visit_webpage_wiki(action.args["url"])
+                webpage_result = " \n ".join(webpage_results)
 
-                    index = 0
-                    counter = 0
-                    best_query_webpage_information_similarity_score = 0.0
-                    for text in texts:
-                        query_embeddings = sentence_transformer_model.encode_query(
-                            state["messages"][-1].content
-                        ).reshape(1, -1)
-                        webpage_information_embeddings = (
-                            sentence_transformer_model.encode_query(text).reshape(1, -1)
-                        )
-                        query_webpage_information_similarity_score = float(
-                            cosine_similarity(
-                                query_embeddings, webpage_information_embeddings
-                            )[0][0]
-                        )
+                final_webpage_results.append(webpage_result)
 
-                        if (
-                            query_webpage_information_similarity_score
-                            > best_query_webpage_information_similarity_score
-                        ):
-                            best_query_webpage_information_similarity_score = (
-                                query_webpage_information_similarity_score
-                            )
-                            index = counter
+                webpage_results = visit_webpage_main(action.args["url"])
+                webpage_result = " \n ".join(webpage_results)
 
-                        counter += 1
+                final_webpage_results.append(webpage_result)
 
-                    webpage_information_complete = f"""answer: {texts[index + 1]}"""
-                    state["best_query_webpage_information_similarity_score"] = 1.0
-
-                else:
-                    webpage_results = visit_webpage_wiki(action.args["url"])
-                    webpage_result = " \n ".join(webpage_results)
-
-                    # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(
-                        state["messages"][-1].content
-                    ).reshape(1, -1)
-                    webpage_information_embeddings = (
-                        sentence_transformer_model.encode_query(webpage_result).reshape(
-                            1, -1
-                        )
-                    )
-                    query_webpage_information_similarity_score = float(
-                        cosine_similarity(
-                            query_embeddings, webpage_information_embeddings
-                        )[0][0]
-                    )
-
-                    # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-
-                    if query_webpage_information_similarity_score > 0.65:
-                        webpage_information_complete += webpage_result
-                        webpage_information_complete += " \n "
-                        webpage_information_complete += " \n "
-
-                    if (
-                        query_webpage_information_similarity_score
-                        > best_query_webpage_information_similarity_score
-                    ):
-                        best_query_webpage_information_similarity_score = (
-                            query_webpage_information_similarity_score
-                        )
-                        best_webpage_information = webpage_result
-
-                    webpage_results = visit_webpage_main(action.args["url"])
-                    webpage_result = " \n ".join(webpage_results)
-
-                    # for webpage_result in webpage_results:
-                    query_embeddings = sentence_transformer_model.encode_query(
-                        state["messages"][-1].content
-                    ).reshape(1, -1)
-                    webpage_information_embeddings = (
-                        sentence_transformer_model.encode_query(webpage_result).reshape(
-                            1, -1
-                        )
-                    )
-                    query_webpage_information_similarity_score = float(
-                        cosine_similarity(
-                            query_embeddings, webpage_information_embeddings
-                        )[0][0]
-                    )
-
-                    # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
-
-                    if query_webpage_information_similarity_score > 0.65:
-                        webpage_information_complete += webpage_result
-                        webpage_information_complete += " \n "
-                        webpage_information_complete += " \n "
-
-                    if (
-                        query_webpage_information_similarity_score
-                        > best_query_webpage_information_similarity_score
-                    ):
-                        best_query_webpage_information_similarity_score = (
-                            query_webpage_information_similarity_score
-                        )
-                        best_webpage_information = webpage_result
             except Exception as e:
                 webpage_information_complete = str(e)
                 pass
@@ -936,19 +783,11 @@ def tool_executor(state: AgentState):
                 f"""answer: {state["proposed_action"]["answer"]}"""
             )
             state["best_query_webpage_information_similarity_score"] = 1.0
-        else:
-            webpage_information_complete = ""
 
-        if (
-            webpage_information_complete == ""
-            and best_query_webpage_information_similarity_score > 0.30
-        ):
-            webpage_information_complete = best_webpage_information
 
         state["information"] = webpage_information_complete[:3000]
-        state["best_query_webpage_information_similarity_score"] = (
-            best_query_webpage_information_similarity_score
-        )
+        state["webpage_results"] = final_webpage_results
+
     except:
         if "answer" in state["proposed_action"]:
             webpage_information_complete = (
@@ -966,11 +805,63 @@ def tool_executor(state: AgentState):
     return state
 
 
+
+def RAG(state: AgentState):
+    if state["information"] == "":
+        best_webpage_information = ""
+        webpage_information_complete = ""
+        best_query_webpage_information_similarity_score = -1.0
+
+        query_embeddings = sentence_transformer_model.encode_query(
+            state["messages"][-1].content
+        ).reshape(1, -1)
+
+        for webpage_result in state["webpage_results"]:
+            webpage_information_embeddings = (
+                sentence_transformer_model.encode_query(webpage_result).reshape(
+                    1, -1
+                )
+            )
+            query_webpage_information_similarity_score = float(
+                cosine_similarity(
+                    query_embeddings, webpage_information_embeddings
+                )[0][0]
+            )
+
+            # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
+
+            if query_webpage_information_similarity_score > 0.65:
+                webpage_information_complete += webpage_result
+                webpage_information_complete += " \n "
+                webpage_information_complete += " \n "
+
+            if (
+                query_webpage_information_similarity_score
+                > best_query_webpage_information_similarity_score
+            ):
+                best_query_webpage_information_similarity_score = (
+                    query_webpage_information_similarity_score
+                )
+                best_webpage_information = webpage_result
+
+        if (
+            webpage_information_complete == ""
+            and best_query_webpage_information_similarity_score > 0.30
+        ):
+            webpage_information_complete = best_webpage_information
+
+        state["information"] = webpage_information_complete[:3000]
+        state["best_query_webpage_information_similarity_score"] = (
+            best_query_webpage_information_similarity_score
+        )
+
+
 safe_workflow = StateGraph(AgentState)
 # safe_workflow = StateGraph(dict)
 
 safe_workflow.add_node("planner", planner_node)
 safe_workflow.add_node("tool_executor", tool_executor)
+safe_workflow.add_node("RAG", RAG)
 safe_workflow.add_node("safety", safety_node)
 # safe_workflow.add_node("judge", Judge)
 
@@ -978,7 +869,8 @@ safe_workflow.add_node("safety", safety_node)
 
 safe_workflow.add_edge(START, "planner")
 safe_workflow.add_edge("planner", "tool_executor")
-safe_workflow.add_edge("tool_executor", "safety")
+safe_workflow.add_edge("tool_executor", "RAG")
+safe_workflow.add_edge("RAG", "safety")
 # safe_workflow.add_edge("safety", "judge")
 # safe_workflow.add_conditional_edges(
 #     "safety",
@@ -1032,10 +924,10 @@ class FakeAgent:
 
 all_questions_and_answers = []
 
-if os.getenv("CI") == "true":
-    agent = FakeAgent()
-else:
-    agent = Agent()
+# if os.getenv("CI") == "true":
+#     agent = FakeAgent()
+# else:
+#     agent = Agent()
 
 
 class Query(BaseModel):
@@ -1079,3 +971,17 @@ def get_answer_to_question(query: Query):
     all_questions_and_answers.append(query)
 
     return query.answer
+
+
+if __name__ == "__main__":
+    agent = Agent()
+    question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
+    # question = "Who won the 2022 world snooker championship?"
+    agent_answer = agent.__call__(question, filename="")
+
+    print(
+        {
+            "question": question,
+            "agent_answer": agent_answer,
+        }
+    )

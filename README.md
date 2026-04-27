@@ -7,7 +7,6 @@
 - Docker
 
 * TODO:
-- GitHub Actions (CI/CD)
 - Asyncio
 - Makefile
 - Linting
