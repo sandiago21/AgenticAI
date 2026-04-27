@@ -784,9 +784,8 @@ def tool_executor(state: AgentState):
             )
             state["best_query_webpage_information_similarity_score"] = 1.0
 
-
         state["information"] = webpage_information_complete[:3000]
-        state["webpage_results"] = final_webpage_results
+        state["best_query_webpage_information_similarity_score"] = -1.0
 
     except:
         if "answer" in state["proposed_action"]:
@@ -802,12 +801,13 @@ def tool_executor(state: AgentState):
     # logger.info(f"Information: {state['information']}")
     # logger.info(f"Information: {state['best_query_webpage_information_similarity_score']}")
 
+    state["webpage_results"] = final_webpage_results
+
     return state
 
 
-
 def RAG(state: AgentState):
-    if state["information"] == "":
+    if state["information"] == "" or True:
         best_webpage_information = ""
         webpage_information_complete = ""
         best_query_webpage_information_similarity_score = -1.0
@@ -854,6 +854,8 @@ def RAG(state: AgentState):
         state["best_query_webpage_information_similarity_score"] = (
             best_query_webpage_information_similarity_score
         )
+
+    return state
 
 
 safe_workflow = StateGraph(AgentState)
@@ -975,8 +977,8 @@ def get_answer_to_question(query: Query):
 
 if __name__ == "__main__":
     agent = Agent()
-    question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
-    # question = "Who won the 2022 world snooker championship?"
+    # question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
+    question = "Who won the 2022 world snooker championship?"
     agent_answer = agent.__call__(question, filename="")
 
     print(
