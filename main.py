@@ -4,6 +4,7 @@ import httpx
 import asyncio
 from fastapi import FastAPI
 from typing import List, Optional
+from concurrent.futures import ProcessPoolExecutor
 from pydantic import BaseModel, Field
 
 import requests
@@ -52,6 +53,7 @@ class Config(object):
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_name = "Qwen/Qwen2.5-7B-Instruct"
         self.DOWNLOAD_LIMIT = 2
+        self.CPU_WORKERS = min(2, os.cpu_count())
         # self.reasoning_model_name = "mistralai/Mistral-7B-Instruct-v0.2"
         # self.reasoning_model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
         # self.reasoning_model_name = "Qwen/Qwen2.5-7B-Instruct"
@@ -177,7 +179,7 @@ async def visit_webpage_wiki(
 
             return None
 
-async def process_webpage_wiki(soup):
+def process_webpage_wiki(soup):
     # Remove scripts/styles
     for tag in soup(["script", "style"]):
         tag.extract()
@@ -230,7 +232,7 @@ async def visit_webpage_main(
             return None
 
 
-async def process_webpage_main(soup):
+def process_webpage_main(soup):
     # Remove scripts/styles
     for tag in soup(["script", "style"]):
         tag.extract()
@@ -261,6 +263,35 @@ async def process_webpage_main(soup):
         return [main_text[:1500], "\n".join(table_texts)[:5000]]
     else:
         return [main_text[:1500]]
+
+
+async def process_webpage_wikis(soups):
+    loop = asyncio.get_running_loop()
+
+    with ProcessPoolExecutor(max_workers=config.CPU_WORKERS) as executor:
+        tasks = [
+            loop.run_in_executor(executor, process_webpage_wiki, soup)
+            for soup in soups
+        ]
+
+        processed_webpage_wikis = await asyncio.gather(*tasks)
+
+    return processed_webpage_wikis
+
+
+async def process_webpage_mains(soups):
+    loop = asyncio.get_running_loop()
+
+    with ProcessPoolExecutor(max_workers=config.CPU_WORKERS) as executor:
+        tasks = [
+            loop.run_in_executor(executor, process_webpage_main, soup)
+            for soup in soups
+        ]
+
+        processed_webpage_mains = await asyncio.gather(*tasks)
+
+    return processed_webpage_mains
+
 
 
 # def visit_webpage_main(
@@ -757,41 +788,54 @@ async def RAG(state: AgentState):
         for category in ["wiki", "main"]:
             category_webpage_soups = state["webpage_results"][category]
 
+            wiki_soups = []
+            main_soups = []
+
             for category_webpage_soup in category_webpage_soups:
                 if category_webpage_soup is not None:
                     if category == "wiki":
-                        webpage_results = await process_webpage_wiki(category_webpage_soup)
+                        wiki_soups.append(category_webpage_soup)
+                        # webpage_results = await process_webpage_wiki(category_webpage_soup)
                     elif category == "main":
-                        webpage_results = await process_webpage_main(category_webpage_soup)
+                        main_soups.append(category_webpage_soup)
+                        # webpage_results = await process_webpage_main(category_webpage_soup)
 
-                    webpage_result = " \n ".join(webpage_results)
+            all_webpage_results_wiki = await process_webpage_wikis(wiki_soups)
+            all_webpage_results_main = await process_webpage_mains(main_soups)
 
-                    webpage_information_embeddings = (
-                        sentence_transformer_model.encode_query(webpage_result).reshape(
-                            1, -1
-                        )
+            all_webpage_results_wiki = [x[0] for x in all_webpage_results_wiki]
+            all_webpage_results_main = [x[0] for x in all_webpage_results_main]
+
+            for webpage_results in all_webpage_results_wiki, all_webpage_results_main:
+
+                webpage_result = " \n ".join(webpage_results)
+
+                webpage_information_embeddings = (
+                    sentence_transformer_model.encode_query(webpage_result).reshape(
+                        1, -1
                     )
-                    query_webpage_information_similarity_score = float(
-                        cosine_similarity(
-                            query_embeddings, webpage_information_embeddings
-                        )[0][0]
-                    )
+                )
+                query_webpage_information_similarity_score = float(
+                    cosine_similarity(
+                        query_embeddings, webpage_information_embeddings
+                    )[0][0]
+                )
 
-                    # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
+                # logger.info(f"Webpage Information and Similarity Score: {result} - {webpage_result} - {query_webpage_information_similarity_score}")
 
-                    if query_webpage_information_similarity_score > 0.65:
-                        webpage_information_complete += webpage_result
-                        webpage_information_complete += " \n "
-                        webpage_information_complete += " \n "
+                if query_webpage_information_similarity_score > 0.65:
+                    webpage_information_complete += webpage_result
+                    webpage_information_complete += " \n "
+                    webpage_information_complete += " \n "
 
-                    if (
+                if (
+                    query_webpage_information_similarity_score
+                    > best_query_webpage_information_similarity_score
+                ):
+                    best_query_webpage_information_similarity_score = (
                         query_webpage_information_similarity_score
-                        > best_query_webpage_information_similarity_score
-                    ):
-                        best_query_webpage_information_similarity_score = (
-                            query_webpage_information_similarity_score
-                        )
-                        best_webpage_information = webpage_result
+                    )
+                    best_webpage_information = webpage_result
 
         if (
             webpage_information_complete == ""
