@@ -919,10 +919,10 @@ class FakeAgent:
 
 all_questions_and_answers = []
 
-# if os.getenv("CI") == "true":
-#     agent = FakeAgent()
-# else:
-#     agent = Agent()
+if os.getenv("CI") == "true":
+    agent = FakeAgent()
+else:
+    agent = Agent()
 
 
 class Query(BaseModel):
@@ -970,8 +970,8 @@ async def get_answer_to_question(query: Query):
 
 async def main():
     # question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
-    question = "Who won the 2022 world snooker championship?"
-    # question = "Who are the drivers of the Ferrari F1 team in 2026?"
+    # question = "Who won the 2022 world snooker championship?"
+    question = "Who are the drivers of the Ferrari F1 team in 2026?"
     agent_answer = await agent.__call__(question, filename="")
 
     print(
@@ -987,5 +987,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    agent = Agent()
+    # agent = Agent()
     asyncio.run(main())
