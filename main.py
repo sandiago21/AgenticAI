@@ -47,9 +47,9 @@ class Config(object):
         self.repetition_penalty = 1.2
         self.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_name = "Qwen/Qwen2.5-7B-Instruct"
-        self.DOWNLOAD_LIMIT = 2
+        self.DOWNLOAD_LIMIT = 10
         self.CPU_WORKERS = min(2, os.cpu_count())
-        self.apply_multithreading = True
+        self.apply_multithreading = False
         self.apply_multiprocessing = False
         # self.reasoning_model_name = "mistralai/Mistral-7B-Instruct-v0.2"
         # self.reasoning_model_name = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
@@ -990,8 +990,8 @@ async def get_answer_to_question(query: Query):
 
 
 async def main():
-    question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
-    # question = "Who won the 2022 world snooker championship?"
+    # question = "Who nominated the only Featured Article on English Wikipedia about a dinosaur that was promoted in November 2016?"
+    question = "Who won the 2025 world snooker championship?"
     # question = "Who are the drivers of the Ferrari F1 team in 2026?"
     agent_answer = await agent.__call__(question, filename="")
 
